@@ -52,6 +52,11 @@ def create_app():
             return jsonify({'error': 'Not found'}), 404
         return send_from_directory(app.static_folder, 'index.html')
 
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        # Return exact error string for debugging Vercel/Supabase issues
+        return jsonify({'error': f"Server Error: {str(e)}"}), 500
+
     with app.app_context():
         try:
             db.create_all()

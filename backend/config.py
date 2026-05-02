@@ -10,3 +10,7 @@ class Config:
     # Fix for Railway PostgreSQL URL (uses postgres:// but SQLAlchemy needs postgresql://)
     if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
         SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
+
+    # Fix for Supabase Pooler (SQLAlchemy must use direct port 5432 instead of transaction port 6543)
+    if SQLALCHEMY_DATABASE_URI and 'supabase.com:6543' in SQLALCHEMY_DATABASE_URI:
+        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('6543', '5432')
