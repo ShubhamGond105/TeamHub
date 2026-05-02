@@ -3,14 +3,23 @@ import os
 
 class Config:
     SECRET_KEY = os.environ.get('JWT_SECRET', 'dev-secret-key-change-in-production')
-    # Use /tmp/ for SQLite so Vercel doesn't crash on read-only filesystem if DATABASE_URL is missing
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:////tmp/taskmanager.db')
+    
+    # Get DB URL, strip it, and ensure it's not empty
+    db_url = os.environ.get('DATABASE_URL', '').strip()
+    if not db_url:
+        db_url = 'sqlite:////tmp/taskmanager.db'
+
+    # Fix for Railway PostgreSQL URL
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
+    # Fix for Supabase Pooler
+    if 'supabase.com:6543' in db_url:
+        db_url = db_url.replace('6543', '5432')
+
+    # Force psycopg3 for Serverless compatibility
+    if db_url.startswith('postgresql://'):
+        db_url = db_url.replace('postgresql://', 'postgresql+psycopg://', 1)
+
+    SQLALCHEMY_DATABASE_URI = db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-
-    # Fix for Railway PostgreSQL URL (uses postgres:// but SQLAlchemy needs postgresql://)
-    if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
-
-    # Fix for Supabase Pooler (SQLAlchemy must use direct port 5432 instead of transaction port 6543)
-    if SQLALCHEMY_DATABASE_URI and 'supabase.com:6543' in SQLALCHEMY_DATABASE_URI:
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('6543', '5432')
