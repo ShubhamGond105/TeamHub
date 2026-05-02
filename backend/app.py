@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Ensure Vercel can import from the backend directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from config import Config
@@ -6,7 +11,10 @@ from models import db
 
 
 def create_app():
-    app = Flask(__name__, static_folder='../frontend', static_url_path='')
+    # Use absolute paths so Vercel can find the frontend folder from the root
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    frontend_dir = os.path.join(base_dir, 'frontend')
+    app = Flask(__name__, static_folder=frontend_dir, static_url_path='')
     app.config.from_object(Config)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
