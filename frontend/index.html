@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="TeamHub Dashboard - Track your projects and tasks">
+    <title>Dashboard | TeamHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="appLayout"></div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/utils.js"></script>
+    <script>
+        if (!requireAuth()) throw new Error('redirect');
+
+        async function loadDashboard() {
+            const layout = document.getElementById('appLayout');
+            layout.innerHTML = buildNavbar('dashboard') + '<main class="main-content"><div class="page-header"><div><h1>Dashboard</h1><p>Overview of your projects and tasks</p></div></div><div id="dashContent"><div class="loading"><div class="spinner"></div>Loading...</div></div></main>';
+
+            try {
+                const data = await api.get('/dashboard');
+                const s = data.stats;
+                const container = document.getElementById('dashContent');
+
+                container.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card accent"><div class="stat-icon">📁</div><div class="stat-value">${s.total_projects}</div><div class="stat-label">Projects</div></div>
+                    <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-value">${s.total_tasks}</div><div class="stat-label">Total Tasks</div></div>
+                    <div class="stat-card success"><div class="stat-icon">✅</div><div class="stat-value">${s.done}</div><div class="stat-label">Completed</div></div>
+                    <div class="stat-card warning"><div class="stat-icon">⏳</div><div class="stat-value">${s.in_progress}</div><div class="stat-label">In Progress</div></div>
+                    <div class="stat-card"><div class="stat-icon">📝</div><div class="stat-value">${s.todo}</div><div class="stat-label">To Do</div></div>
+                    <div class="stat-card danger"><div class="stat-icon">🔴</div><div class="stat-value">${s.overdue}</div><div class="stat-label">Overdue</div></div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                    <div class="card">
+                        <div class="card-header"><h3>Recent Tasks</h3></div>
+                        <div id="recentTasks"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h3>⚠️ Overdue Tasks</h3></div>
+                        <div id="overdueTasks"></div>
+                    </div>
+                </div>`;
+
+                renderTaskList('recentTasks', data.recent_tasks, 'No recent tasks');
+                renderTaskList('overdueTasks', data.overdue_tasks, 'No overdue tasks — great job! 🎉');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        function renderTaskList(containerId, tasks, emptyMsg) {
+            const el = document.getElementById(containerId);
+            if (!tasks.length) {
+                el.innerHTML = `<p style="color:var(--text-muted);font-size:13px;padding:16px 0">${emptyMsg}</p>`;
+                return;
+            }
+            el.innerHTML = tasks.map(t => `
+                <div class="member-item" style="cursor:pointer" onclick="window.location.href='/project.html?id=${t.project_id}'">
+                    <div>
+                        <div style="font-size:14px;font-weight:500">${t.title}</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${t.project_name || 'Project'} · ${formatDate(t.due_date)}${t.due_date && isOverdue(t.due_date) && t.status !== 'done' ? ' <span class="badge badge-overdue">Overdue</span>' : ''}</div>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <span class="badge badge-${t.priority}">${t.priority}</span>
+                        <span class="badge badge-${t.status}">${t.status.replace('_',' ')}</span>
+                    </div>
+                </div>`).join('');
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage your projects on TeamHub">
+    <title>Projects | TeamHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="appLayout"></div>
+
+    <!-- Create Project Modal -->
+    <div class="modal-overlay" id="createProjectModal">
+        <div class="modal">
+            <h2>Create New Project</h2>
+            <form id="createProjectForm">
+                <div class="form-group">
+                    <label for="projectName">Project Name</label>
+                    <input type="text" id="projectName" placeholder="e.g. Website Redesign" required>
+                </div>
+                <div class="form-group">
+                    <label for="projectDesc">Description</label>
+                    <textarea id="projectDesc" placeholder="Brief description of the project..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createProjectModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/utils.js"></script>
+    <script>
+        if (!requireAuth()) throw new Error('redirect');
+
+        async function loadProjects() {
+            const layout = document.getElementById('appLayout');
+            const user = getCurrentUser();
+            const isAdmin = user && user.role === 'admin';
+            
+            layout.innerHTML = buildNavbar('projects') + `
+            <main class="main-content">
+                <div class="page-header">
+                    <div><h1>Projects</h1><p>Manage your team projects</p></div>
+                    ${isAdmin ? '<button class="btn btn-primary" onclick="openModal(\'createProjectModal\')">+ New Project</button>' : ''}
+                </div>
+                <div id="projectsGrid"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+            </main>`;
+
+            try {
+                const data = await api.get('/projects');
+                const grid = document.getElementById('projectsGrid');
+
+                if (!data.projects.length) {
+                    showEmpty(grid, '📁', 'No projects yet', 
+                        isAdmin ? 'Create your first project to get started' : 'Wait for an admin to invite you to a project',
+                        isAdmin ? '<button class="btn btn-primary" onclick="openModal(\'createProjectModal\')">+ Create Project</button>' : '');
+                    return;
+                }
+
+                grid.className = 'project-grid';
+                grid.innerHTML = data.projects.map(p => `
+                    <div class="project-card" onclick="window.location.href='/project.html?id=${p.id}'">
+                        <h3>${p.name}</h3>
+                        <p>${p.description || 'No description'}</p>
+                        <div class="project-meta">
+                            <span>👥 ${p.member_count} members</span>
+                            <span>📋 ${p.task_count} tasks</span>
+                            <span class="badge badge-${p.user_role}">${p.user_role}</span>
+                        </div>
+                    </div>`).join('');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        document.getElementById('createProjectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await api.post('/projects', {
+                    name: document.getElementById('projectName').value,
+                    description: document.getElementById('projectDesc').value
+                });
+                closeModal('createProjectModal');
+                showToast('Project created!');
+                loadProjects();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+
+        loadProjects();
+    </script>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Project Details - TeamHub">
+    <title>Project | TeamHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="appLayout"></div>
+
+    <!-- Task Modal -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+            <h2 id="taskModalTitle">Create Task</h2>
+            <form id="taskForm">
+                <input type="hidden" id="taskId">
+                <div class="form-group">
+                    <label for="taskTitle">Title</label>
+                    <input type="text" id="taskTitle" placeholder="Task title" required>
+                </div>
+                <div class="form-group">
+                    <label for="taskDesc">Description</label>
+                    <textarea id="taskDesc" placeholder="Describe the task..."></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskStatus">Status</label>
+                        <select id="taskStatus"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="done">Done</option></select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="form-group">
+                        <label for="taskDue">Due Date</label>
+                        <input type="date" id="taskDue">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskAssignee">Assign To</label>
+                        <select id="taskAssignee"><option value="">Unassigned</option></select>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('taskModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="taskSubmitBtn">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div class="modal-overlay" id="memberModal">
+        <div class="modal">
+            <h2>Add Team Member</h2>
+            <form id="memberForm">
+                <div class="form-group">
+                    <label for="memberEmail">Email Address</label>
+                    <input type="email" id="memberEmail" placeholder="user@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="memberRole">Role</label>
+                    <select id="memberRole"><option value="member">Member</option><option value="admin">Admin</option></select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('memberModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/utils.js"></script>
+    <script>
+        if (!requireAuth()) throw new Error('redirect');
+
+        const { id: projectId } = getParams();
+        if (!projectId) { window.location.href = '/projects.html'; throw new Error('no id'); }
+
+        let projectData = null;
+        let membersData = [];
+        let tasksData = [];
+        let userRole = 'member';
+
+        async function loadAll() {
+            const layout = document.getElementById('appLayout');
+            layout.innerHTML = buildNavbar('projects') + '<main class="main-content" id="mainContent"><div class="loading"><div class="spinner"></div>Loading...</div></main>';
+            try {
+                const [pRes, mRes, tRes] = await Promise.all([
+                    api.get(`/projects/${projectId}`),
+                    api.get(`/projects/${projectId}/members`),
+                    api.get(`/projects/${projectId}/tasks`)
+                ]);
+                projectData = pRes.project;
+                membersData = mRes.members;
+                tasksData = tRes.tasks;
+                userRole = projectData.user_role;
+                render();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        function render() {
+            const isAdmin = userRole === 'admin';
+            const main = document.getElementById('mainContent');
+            const todo = tasksData.filter(t => t.status === 'todo');
+            const prog = tasksData.filter(t => t.status === 'in_progress');
+            const done = tasksData.filter(t => t.status === 'done');
+
+            main.innerHTML = `
+            <div class="page-header">
+                <div>
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <a href="/projects.html" style="color:var(--text-muted);text-decoration:none;font-size:20px">←</a>
+                        <h1>${projectData.name}</h1>
+                        <span class="badge badge-${userRole}">${userRole}</span>
+                    </div>
+                    <p>${projectData.description || 'No description'}</p>
+                </div>
+                <div style="display:flex;gap:8px">
+                    ${isAdmin ? '<button class="btn btn-secondary btn-sm" onclick="openMemberModal()">👥 Add Member</button><button class="btn btn-primary btn-sm" onclick="openCreateTask()">+ Add Task</button>' : ''}
+                </div>
+            </div>
+
+            <!-- Kanban Board -->
+            <div class="kanban-board">
+                <div class="kanban-column column-todo">
+                    <div class="kanban-column-header"><h3>📝 To Do <span class="count">${todo.length}</span></h3></div>
+                    <div id="colTodo">${renderCards(todo)}</div>
+                </div>
+                <div class="kanban-column column-progress">
+                    <div class="kanban-column-header"><h3>⏳ In Progress <span class="count">${prog.length}</span></h3></div>
+                    <div id="colProgress">${renderCards(prog)}</div>
+                </div>
+                <div class="kanban-column column-done">
+                    <div class="kanban-column-header"><h3>✅ Done <span class="count">${done.length}</span></h3></div>
+                    <div id="colDone">${renderCards(done)}</div>
+                </div>
+            </div>
+
+            <!-- Members Section -->
+            <div class="card" style="margin-top:32px">
+                <div class="card-header"><h3>👥 Team Members (${membersData.length})</h3></div>
+                <div id="membersList">${renderMembers()}</div>
+            </div>`;
+        }
+
+        function renderCards(tasks) {
+            if (!tasks.length) return '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">No tasks</p>';
+            return tasks.map(t => {
+                const od = t.due_date && isOverdue(t.due_date) && t.status !== 'done';
+                return `<div class="task-card" onclick="openEditTask(${t.id})">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+                        <h4>${t.title}</h4>
+                        <span class="badge badge-${t.priority}">${t.priority}</span>
+                    </div>
+                    ${t.description ? `<p>${t.description}</p>` : ''}
+                    <div class="task-meta">
+                        <div class="task-assignee">
+                            ${t.assignee ? `<span class="mini-avatar">${getInitials(t.assignee.name)}</span>${t.assignee.name}` : '<span style="color:var(--text-muted)">Unassigned</span>'}
+                        </div>
+                        <div style="display:flex;gap:4px;align-items:center">
+                            ${od ? '<span class="badge badge-overdue">Overdue</span>' : ''}
+                            ${t.due_date ? `<span style="font-size:11px;color:var(--text-muted)">${formatDate(t.due_date)}</span>` : ''}
+                        </div>
+                    </div>
+                    ${renderStatusBtns(t)}
+                </div>`;
+            }).join('');
+        }
+
+        function renderStatusBtns(t) {
+            const user = getCurrentUser();
+            const isAdmin = userRole === 'admin';
+            const isAssigned = t.assigned_to === user.id;
+            if (!isAdmin && !isAssigned) return '';
+            const btns = [];
+            if (t.status !== 'todo') btns.push(`<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();changeStatus(${t.id},'todo')">📝 Todo</button>`);
+            if (t.status !== 'in_progress') btns.push(`<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();changeStatus(${t.id},'in_progress')">⏳ Progress</button>`);
+            if (t.status !== 'done') btns.push(`<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();changeStatus(${t.id},'done')">✅ Done</button>`);
+            return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${btns.join('')}</div>`;
+        }
+
+        function renderMembers() {
+            return membersData.map(m => `
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="user-avatar" style="width:32px;height:32px;font-size:12px">${getInitials(m.user?.name)}</div>
+                        <div>
+                            <div style="font-weight:500;font-size:14px">${m.user?.name || 'Unknown'}</div>
+                            <div style="font-size:12px;color:var(--text-muted)">${m.user?.email || ''}</div>
+                        </div>
+                    </div>
+                    <div class="member-actions">
+                        <span class="badge badge-${m.role}">${m.role}</span>
+                        ${userRole === 'admin' && m.user_id !== getCurrentUser().id ? `
+                            <button class="btn btn-secondary btn-sm" onclick="toggleRole(${m.user_id},'${m.role === 'admin' ? 'member' : 'admin'}')">${m.role === 'admin' ? 'Demote' : 'Promote'}</button>
+                            <button class="btn btn-danger btn-sm" onclick="removeMember(${m.user_id})">Remove</button>
+                        ` : ''}
+                    </div>
+                </div>`).join('');
+        }
+
+        // ===== ACTIONS =====
+        async function changeStatus(taskId, status) {
+            try {
+                await api.put(`/tasks/${taskId}`, { status });
+                const t = tasksData.find(x => x.id === taskId);
+                if (t) t.status = status;
+                render();
+                showToast('Status updated');
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        function openCreateTask() {
+            document.getElementById('taskModalTitle').textContent = 'Create Task';
+            document.getElementById('taskSubmitBtn').textContent = 'Create Task';
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskId').value = '';
+            populateAssigneeDropdown();
+            openModal('taskModal');
+        }
+
+        function openEditTask(taskId) {
+            if (userRole !== 'admin') return;
+            const t = tasksData.find(x => x.id === taskId);
+            if (!t) return;
+            document.getElementById('taskModalTitle').textContent = 'Edit Task';
+            document.getElementById('taskSubmitBtn').textContent = 'Save Changes';
+            document.getElementById('taskId').value = t.id;
+            document.getElementById('taskTitle').value = t.title;
+            document.getElementById('taskDesc').value = t.description || '';
+            document.getElementById('taskPriority').value = t.priority;
+            document.getElementById('taskStatus').value = t.status;
+            document.getElementById('taskDue').value = t.due_date ? t.due_date.split('T')[0] : '';
+            populateAssigneeDropdown();
+            document.getElementById('taskAssignee').value = t.assigned_to || '';
+            openModal('taskModal');
+        }
+
+        function populateAssigneeDropdown() {
+            const sel = document.getElementById('taskAssignee');
+            sel.innerHTML = '<option value="">Unassigned</option>' +
+                membersData.map(m => `<option value="${m.user_id}">${m.user?.name || m.user?.email}</option>`).join('');
+        }
+
+        document.getElementById('taskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('taskId').value;
+            const body = {
+                title: document.getElementById('taskTitle').value,
+                description: document.getElementById('taskDesc').value,
+                priority: document.getElementById('taskPriority').value,
+                status: document.getElementById('taskStatus').value,
+                due_date: document.getElementById('taskDue').value || null,
+                assigned_to: document.getElementById('taskAssignee').value ? parseInt(document.getElementById('taskAssignee').value) : null
+            };
+            try {
+                if (id) { await api.put(`/tasks/${id}`, body); }
+                else { await api.post(`/projects/${projectId}/tasks`, body); }
+                closeModal('taskModal');
+                showToast(id ? 'Task updated' : 'Task created');
+                const tRes = await api.get(`/projects/${projectId}/tasks`);
+                tasksData = tRes.tasks;
+                render();
+            } catch (err) { showToast(err.message, 'error'); }
+        });
+
+        function openMemberModal() { document.getElementById('memberForm').reset(); openModal('memberModal'); }
+
+        document.getElementById('memberForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await api.post(`/projects/${projectId}/members`, {
+                    email: document.getElementById('memberEmail').value,
+                    role: document.getElementById('memberRole').value
+                });
+                closeModal('memberModal');
+                showToast('Member added');
+                const mRes = await api.get(`/projects/${projectId}/members`);
+                membersData = mRes.members;
+                render();
+            } catch (err) { showToast(err.message, 'error'); }
+        });
+
+        async function toggleRole(userId, newRole) {
+            try {
+                await api.put(`/projects/${projectId}/members/${userId}`, { role: newRole });
+                showToast('Role updated');
+                const mRes = await api.get(`/projects/${projectId}/members`);
+                membersData = mRes.members;
+                render();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        async function removeMember(userId) {
+            if (!confirm('Remove this member?')) return;
+            try {
+                await api.delete(`/projects/${projectId}/members/${userId}`);
+                showToast('Member removed');
+                const mRes = await api.get(`/projects/${projectId}/members`);
+                membersData = mRes.members;
+                render();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        loadAll();
+    </script>
+</body>
+</html>
