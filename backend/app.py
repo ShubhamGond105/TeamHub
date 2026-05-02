@@ -53,7 +53,11 @@ def create_app():
         return send_from_directory(app.static_folder, 'index.html')
 
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            import sys
+            print(f"Database initialization error: {e}", file=sys.stderr)
 
     return app
 
