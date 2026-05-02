@@ -18,7 +18,12 @@ def create_app():
     app.config.from_object(Config)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
-    db.init_app(app)
+    
+    try:
+        db.init_app(app)
+    except Exception as e:
+        import sys
+        print(f"CRITICAL DB INIT ERROR: {e}", file=sys.stderr)
 
     # Register blueprints
     from routes.auth import auth_bp
