@@ -1,4 +1,4 @@
-# TaskFlow — Team Task Manager
+# TaskHub — Team Task Manager
 
 A full-stack web application for managing projects, assigning tasks, and tracking progress with **role-based access control (Admin/Member)**.
 
@@ -98,6 +98,3 @@ Open http://localhost:5000
 ### Dashboard
 - `GET /api/dashboard` — Aggregated stats
 
-## 📝 License
-
-MIT
