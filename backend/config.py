@@ -7,7 +7,7 @@ class Config:
     # Get DB URL, strip it, and ensure it's not empty
     db_url = os.environ.get('DATABASE_URL', '').strip()
     if not db_url:
-        db_url = 'sqlite:////tmp/taskmanager.db'
+        db_url = 'sqlite:///taskmanager.db'
 
     # Fix for Railway PostgreSQL URL
     if db_url.startswith('postgres://'):
